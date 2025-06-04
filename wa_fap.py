@@ -1,0 +1,319 @@
+# Projet FinTech
+"""
+Nom du projet   : Financial Asset Profile
+Auteur          : William Amani
+Version         : 1.0
+Date            : 2025-05-07
+Description     : Extraction de données qualitatives et quantitatives d'un actif financier via Yahoo Finance
+Licence         : Massachusetts Institute of Technology (MIT)
+"""
+
+
+# Packages
+import yfinance as yf
+from datetime import datetime
+import matplotlib.pyplot as plt
+import matplotlib.dates as mdates
+import matplotlib.ticker as mlocat
+
+
+# Couleurs pour affichage
+BLEU = "\033[94m"
+BLEU_CIEL = "\033[96m"
+GREEN = "\033[92m"
+RED = "\033[91m"
+RESET = "\033[0m"
+
+
+
+# Accéder aux données de l'actif financier sur yahoo!finance via le ticker fourni
+def get_ticker():
+    while True:
+        input_ticker = input("Ticker du titre financier ---> ").upper()
+        
+        if input_ticker == "":
+            print("Aucun ticker n'a été inscrit. Veuillez réessayer.")
+            continue
+        try:
+            ticker = yf.Ticker(input_ticker)
+            info = ticker.info
+            if 'shortName' in info:
+                return input_ticker, ticker, info
+            else:
+                print(f"Le ticker n'a pas été reconnu. Veuillez vous assurer que {input_ticker} fait bien partie de yahoo!finance.")
+        except Exception as e:
+            print("Veuillez vérifier le ticker puis réessayer.")
+            print(f"Erreur lors de la correspondance dans yahoo!finance : {e}")
+
+
+# Convertir la monnaie de l'actif financier en monnaie locale déterminée
+def convert_currency(info):
+    ticker_currency = info.get("currency")
+    my_currency = input("Votre monnaie en ISO Code (ex. : CAD) ---> ").upper()
+    try:
+        if ticker_currency != my_currency:
+            currency_pair = f"{ticker_currency}{my_currency}=X"
+            forex = yf.Ticker(currency_pair)
+            exchange_rate = forex.history(period = "1d")["Close"].iloc[-1]
+        else:
+            exchange_rate = 1
+        return ticker_currency, my_currency, exchange_rate
+    except Exception as e:
+        print(f"Erreur lors de la conversion : {e}")
+
+
+# Récupérer sur yahoo!finance les données qualitatives de l'actif financier via son ticker
+def get_qualitative_data(ticker, info):
+    # Afficher les données qualitatives de l'actif financier via son ticker
+    qualitative_data = {
+        "Company name": info.get("longName")    if info.get("longName") 
+                                                else "N/A",
+        "Ticker": info.get("symbol")    if info.get("symbol") 
+                                        else "N/A",
+        "Type of Asset": info.get("quoteType").capitalize()     if info.get("quoteType") 
+                                                                else "N/A",
+        "Year of creation": "(Go to Description)",
+
+        "Head of Office": f"{info.get("city")} ({info.get("state")}), {info.get("country")} ({info.get("address1")}, {info.get("zip")})"    if (((info.get("address1") and info.get("city")) and info.get("state")) and info.get("zip")) and info.get("country") 
+                                                                                                                                            else "N/A",
+        "Website": f"{BLEU_CIEL}{info.get('website')}{RESET}"   if info.get('website') 
+                                                                else "N/A",
+        "Sector": info.get("sector")    if info.get("sector") 
+                                        else "N/A",
+        "Industry": info.get("industry")    if info.get("industry") 
+                                            else 'N/A',
+        "Country": info.get("country")  if info.get("country") 
+                                        else "N/A",
+        "Exchange": f"{info.get('fullExchangeName')} ({info.get('exchange')}, {info.get('exchangeTimezoneName')})"  if (info.get('fullExchangeName') and info.get("exchange")) and info.get('exchangeTimezoneName') 
+                                                                                                                    else "N/A",
+        "ISO Currency Code": info.get("currency")   if info.get("currency") 
+                                                    else "N/A",
+        "Ex-Dividend Date": datetime.fromtimestamp(info["exDividendDate"]).strftime('%Y-%m-%d')     if info.get("exDividendDate") 
+                                                                                                    else 'N/A',
+        "Dividend Date": datetime.fromtimestamp(info["dividendDate"]).strftime('%Y-%m-%d')  if info.get("dividendDate") 
+                                                                                            else 'N/A',
+        "Next Fiscal Year End": datetime.fromtimestamp(info["nextFiscalYearEnd"]).strftime('%Y-%m-%d')  if info.get("nextFiscalYearEnd")
+                                                                                                        else "N/A",
+        "Next publication of results": info.get("earningsDate")     if info.get("earningsDate")
+                                                                    else "N/A",
+        "Description": f"{info.get('longBusinessSummary')[:500]}..."    if info.get("longBusinessSummary") 
+                                                                        else "N/A"
+    }
+
+    return qualitative_data
+
+
+# Récupérer sur yahoo!finance les données quantitatives de l'actif financier via son ticker
+def get_quantitative_data(ticker, info, ticker_currency, my_currency, exchange_rate):
+    # Accéder à l'historique de prix et y déterminer ce qui suit
+    price_data = ticker.history(period="1d")
+    if not price_data.empty:
+        last_price_date = price_data.index[-1].strftime('%Y-%m-%d')                                                         # Dernier prix last de l'actif financier
+        if 'Adj Close' in price_data.columns:                                                                               # Prix de fermeture ajusté comme
+            current_price = price_data["Adj Close"].iloc[-1]                                                                # prix courant de l'actif financier, sinon
+        else:                                                                                                               # Prix de fermeture comme
+            current_price = price_data["Close"].iloc[-1]                                                                    # prix courant de l'actif financier
+        previous_close = info.get("previousClose")                                                                          # Précédent prix de fermeture
+        price_change_value = current_price - previous_close if previous_close else None                                     # Variation de prix (en monnaie)
+        price_change_percent = (price_change_value / previous_close) if previous_close else None                            # Variation de prix (en pourcentage)
+    else:
+        last_price_date = None
+        current_price = None
+        price_change_value = None
+        price_change_percent = None
+
+    # Afficher les données quantitatives de l'actif financier via son ticker
+    quantitative_data = {
+        "Price Date": last_price_date   if last_price_date 
+                                        else "N/A",
+        "ISO Currency Code": info.get("currency")   if info.get("currency") 
+                                                    else "N/A",
+        "My ISO Currency Code": my_currency     if my_currency 
+                                                else "N/A",
+        "Exchange Rate": f"{round(exchange_rate, 4)} {my_currency}/{ticker_currency}",
+        
+        "Current Price": f"{round(current_price * exchange_rate, 2)} {my_currency} <-- {round(current_price, 2)} {info.get('currency')}"    if current_price 
+                                                                                                                                            else "N/A",
+        "Price Change (currency)":  f"{RED}{round(price_change_value * exchange_rate, 2)} {my_currency}{RESET} <-- {RED}{round(price_change_value, 2)} {info.get('currency')}{RESET}"   if price_change_value <= 0 
+                                                                                                                                                                                        else f"{GREEN}+{round(price_change_value * exchange_rate, 2)} {my_currency}{RESET} <-- {GREEN}+{round(price_change_value, 2)} {info.get("currency")}{RESET}",
+        "Price Change (percent)":   f"{RED}{round(price_change_percent * 100, 2)}%{RESET}"  if price_change_percent <= 0 
+                                                                                            else f"{GREEN}+{round(price_change_percent * 100, 2)}%{RESET}",
+        "Forward Earning": f"{round(info.get("epsForward") * exchange_rate, 2)} {my_currency} <-- {round(info.get("lastDividendValue"), 2)} {info.get('currency')}"     if info.get("lastDividendValue") 
+                                                                                                                                                                        else "N/A",
+        "Last Dividend": f"{round(info.get("lastDividendValue") * exchange_rate, 2)} {my_currency} <-- {round(info.get("lastDividendValue"), 2)} {info.get('currency')}"    if info.get("lastDividendValue") 
+                                                                                                                                                                            else "N/A",
+        "Enterprise Value": f"{round(info.get("enterpriseValue") * exchange_rate, 0)} {my_currency} <-- {round(info.get("enterpriseValue"), 0)} {info.get('currency')}"     if info.get("enterpriseValue") 
+                                                                                                                                                                            else "N/A",
+        "Total Cash": f"{round(info.get("totalCash") * exchange_rate, 0)} {my_currency} <-- {round(info.get("totalCash"), 0)} {info.get('currency')}"   if info.get("totalCash") 
+                                                                                                                                                        else "N/A",
+        "Total Debt": f"{round(info.get("totalDebt") * exchange_rate, 0)} {my_currency} <-- {round(info.get("totalDebt"), 0)} {info.get('currency')}"   if info.get("totalDebt") 
+                                                                                                                                                        else "N/A",
+        "Market Capitalization": f"{round(info.get("marketCap") * exchange_rate, 0)} {my_currency} <-- {round(info.get("marketCap"), 0)} {info.get('currency')}"    if info.get("marketCap") 
+                                                                                                                                                                    else "N/A",
+        "Shares outstanding": f"{info.get("sharesOutstanding")} shares"     if info.get("sharesOutstanding") 
+                                                                            else "N/A", 
+        "Number of Employees": info.get("fullTimeEmployees")    if info.get("fullTimeEmployees") 
+                                                                else "N/A", 
+        "52 Week High": f"{round(info.get('fiftyTwoWeekHigh') * exchange_rate, 2)} {my_currency} <-- {round(info.get('fiftyTwoWeekHigh'), 2)} {info.get('currency')}"   if info.get("fiftyTwoWeekHigh") 
+                                                                                                                                                                        else "N/A", 
+        "52 Week Low": f"{round(info.get('fiftyTwoWeekLow') * exchange_rate, 2)} {my_currency} <-- {round(info.get('fiftyTwoWeekLow'), 2)} {info.get('currency')}"  if info.get("fiftyTwoWeekLow") 
+                                                                                                                                                                    else "N/A", 
+        "Beta": round(info.get("beta"), 5)  if info.get("beta") 
+                                            else "N/A", 
+        "Return on Equity": f"{round(info.get('returnOnEquity') * 100, 2)}%"    if info.get("returnOnEquity") 
+                                                                                else "N/A", 
+        "Dividend Payout Ratio": f"{round(info.get('payoutRatio') * 100, 2)}%"  if info.get("payoutRatio") 
+                                                                                else "N/A", 
+        "Sustainable Growth Rate": f"{round((info.get('returnOnEquity') * (1 - info.get('payoutRatio'))) * 100,2)}%"    if info.get("returnOnEquity") and info.get("payoutRatio") 
+                                                                                                                        else "N/A",
+        "Trailing P/E": round(info.get("trailingPE"), 2)    if info.get("trailingPE") 
+                                                            else "N/A",
+        "Forward P/E": round(info.get("forwardPE"), 2)  if info.get("forwardPE") 
+                                                        else "N/A",
+        "PEG Ratio": round(info.get("pegRatio"), 2)     if info.get("pegRatio") 
+                                                        else "N/A",
+        "EV/EBITDA": round(info.get("enterpriseToEbitda"), 2)   if info.get("enterpriseToEbitda") 
+                                                                else "N/A",
+        "EV/Revenue": round(info.get("enterpriseToRevenue"), 2)     if info.get("enterpriseToRevenue") 
+                                                                    else "N/A",
+    }
+
+    return quantitative_data
+
+
+# Emettre le graphique d'évolution de prix de l'actif financier via son ticker
+def chart(info, ticker, exchange_rate, my_currency):
+    # Indiquer les périodes et labels du grpahique
+    periods = {
+        "1": "1d", "2": "5d", "3": "1mo", "4": "3mo", 
+        "5": "6mo", "6": "1y", "7":"5y", "8": "10y", "9": "max"
+    }
+    labels = {
+        "1": "1 jour", "2": "5 jours", "3": "1 mois", "4": "1 trimestre", 
+        "5": "1 semestre", "6": "1 an", "7": "5 ans", "8": "10 ans", "9": "Depuis le début"
+    }
+
+    # Boucle de la composition du graphique d'évolution de prix de l'actif financier
+    while True:
+        # Afficher d'une légende pour faciliter le choix de la période
+        print("\nPériode du graphique :", 
+              "\n   1: 1 jour       ‖ 2: 5 jours    ‖ 3: 1 mois     ‖ 4: 1 trimestre", 
+              "\n   5: 1 semestre   ‖ 6: 1 an       ‖ 7: 5 ans      ‖ 8: 10 ans         ‖ 9: Depuis le début")
+        
+        # Choisir la période et paramétrer le label
+        period_choice = input(f"---> Votre choix est un graphique de {input_ticker} sur une période #").strip()
+        period = periods.get(period_choice)
+        label = labels.get(period_choice)
+        if not period:
+            print("Choix invalide. Veuillez réessayer.")
+            continue
+
+        # Vérifier la période choisie et Convertir les prix en monnaie locale
+        period_data = ticker.history(period = period)
+        if period_data.empty:
+            print("Aucune donnée n'est disponible pour cette période. Veuillez réessayez.")
+            continue
+        period_data["Converted_Close"] = period_data["Close"] * exchange_rate
+
+        # Indiquer les paramètres du graphique de l'évolution de prix de l'actif financier
+        plt.figure(figsize=(16, 5))
+        plt.plot(period_data.index, period_data["Converted_Close"], label="Prix (converti)", color="blue")
+        plt.title(f"Évolution du prix de {info.get("longName")} (sur {label})")
+        plt.xlabel("Date")
+        plt.ylabel(f"Prix (en {my_currency})")
+        plt.grid(True, which='both', linestyle='--', linewidth=0.5, color='gray')
+        plt.minorticks_on()
+
+        ax = plt.gca()
+        if period == "1d":
+            ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d %Hh'))
+            ax.xaxis.set_major_locator(mdates.HourLocator(interval=6))
+        elif period == "5d":
+            ax.xaxis.set_major_locator(mdates.DayLocator())
+            ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d %Hh'))
+        elif period in ["1mo", "3mo", "6mo"]:
+            ax.xaxis.set_major_locator(mdates.WeekdayLocator(interval=1))
+            ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d'))
+        elif period in ["1y", "5y", "10y"]:
+            ax.xaxis.set_major_locator(mdates.MonthLocator(interval=6))
+            ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m'))
+        else:
+            ax.xaxis.set_major_locator(mdates.YearLocator(base=1))
+            ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y'))
+        ax.xaxis.set_minor_locator(mlocat.NullLocator())
+
+        plt.legend()
+        plt.margins(x=0)
+        plt.autoscale(enable=True, axis='x', tight=True)
+        plt.tight_layout()
+        plt.show()
+
+        break
+    
+
+# Afficher les données qualitatives et quantitatives extraites sur l'actif financie via son ticker
+def results_display(input_ticker, ticker, info, ticker_currency, my_currency, exchange_rate):
+    print(f"\n--- INFORMATIONS QUALITATITVES POUR {input_ticker} ---")
+    qualitative_data = get_qualitative_data(ticker, info)
+    for key, value in qualitative_data.items():
+        print(f"{key}: {value}")
+    
+    print(f"\n--- INFORMATIONS QUANTITATIVES POUR {input_ticker} ---")
+    quantitative_data = get_quantitative_data(ticker, info, ticker_currency, my_currency, exchange_rate)
+    for key, value in quantitative_data.items():
+        print(f"{key}: {value}")
+
+
+# Restreindre l'exécution de ce code au lancement de ce fichier uniquement
+if __name__ == "__main__":
+    print("Exécution de Financial Asset Profile - conçu par William Amani")
+    input_ticker, ticker, info = get_ticker()
+    ticker_currency, my_currency, exchange_rate = convert_currency(info)
+    results_display(input_ticker, ticker, info, ticker_currency, my_currency, exchange_rate)
+    chart(info, ticker, exchange_rate, my_currency)
+
+
+
+
+
+# Licence Massachusetts Institute of Technology (MIT)
+"""
+MIT License
+
+Copyright (c) 2025 William Amani
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+"""
+
+
+"""
+Licence MIT
+
+Une licence permissive courte et simple avec des conditions exigeant uniquement la 
+préservation des droits d'auteur et des avis de licence. Les œuvres sous licence, 
+les modifications et les œuvres plus importantes peuvent être distribuées sous des 
+conditions différentes et sans code source.
+
+Autorisations                   Conditions                      Limitations
+ Utilisation commerciale         Licence et avis de              Responsabilité
+ Distribution                    droit d'auteur                  Garantie
+ Modification
+ Usage privé
+"""
