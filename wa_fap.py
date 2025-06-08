@@ -3,7 +3,7 @@
 Nom du projet   : Financial Asset Profile
 Auteur          : William Amani
 Version         : 1.0
-Date            : 2025-05-07
+Date            : 2025-06-07
 Description     : Extraction de données qualitatives et quantitatives d'un actif financier via Yahoo Finance
 Licence         : Massachusetts Institute of Technology (MIT)
 """
