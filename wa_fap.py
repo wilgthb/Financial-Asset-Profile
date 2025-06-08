@@ -15,6 +15,11 @@ from datetime import datetime
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 import matplotlib.ticker as mlocat
+import time
+from rich.console import Console
+from rich.panel import Panel
+from rich.table import Table
+
 
 
 # Couleurs pour affichage
@@ -22,14 +27,19 @@ BLEU = "\033[94m"
 BLEU_CIEL = "\033[96m"
 GREEN = "\033[92m"
 RED = "\033[91m"
+ROSE = "\033[95m"
 RESET = "\033[0m"
+
+# Autres paramètres
+delai = 0.5
+console = Console()
 
 
 
 # Accéder aux données de l'actif financier sur yahoo!finance via le ticker fourni
 def get_ticker():
     while True:
-        input_ticker = input("Ticker du titre financier ---> ").upper()
+        input_ticker = input("Ticker de l'actif financier ---> ").strip().upper()
         
         if input_ticker == "":
             print("Aucun ticker n'a été inscrit. Veuillez réessayer.")
@@ -37,33 +47,35 @@ def get_ticker():
         try:
             ticker = yf.Ticker(input_ticker)
             info = ticker.info
+            time.sleep(delai)
             if 'shortName' in info:
                 return input_ticker, ticker, info
             else:
-                print(f"Le ticker n'a pas été reconnu. Veuillez vous assurer que {input_ticker} fait bien partie de yahoo!finance.")
+                print(f"{RED}Le ticker n'a pas été reconnu. Veuillez vous assurer que {input_ticker} fait bien partie de yahoo!finance.{RESET}")
         except Exception as e:
-            print("Veuillez vérifier le ticker puis réessayer.")
-            print(f"Erreur lors de la correspondance dans yahoo!finance : {e}")
+            print(f"{RED}Veuillez vérifier le ticker puis réessayer.{RESET}")
+            print(f"{RED}Erreur lors de la correspondance dans yahoo!finance : {e}{RESET}")
 
 
 # Convertir la monnaie de l'actif financier en monnaie locale déterminée
 def convert_currency(info):
     ticker_currency = info.get("currency")
-    my_currency = input("Votre monnaie en ISO Code (ex. : CAD) ---> ").upper()
+    my_currency = input(f"Votre monnaie en ISO Code (ISO code du ticker : {info.get("currency")}) ---> ").upper()
     try:
         if ticker_currency != my_currency:
             currency_pair = f"{ticker_currency}{my_currency}=X"
             forex = yf.Ticker(currency_pair)
             exchange_rate = forex.history(period = "1d")["Close"].iloc[-1]
+            time.sleep(delai)
         else:
             exchange_rate = 1
         return ticker_currency, my_currency, exchange_rate
     except Exception as e:
-        print(f"Erreur lors de la conversion : {e}")
+        print(f"{RED}Erreur lors de la conversion : {e}{RESET}")
 
 
 # Récupérer sur yahoo!finance les données qualitatives de l'actif financier via son ticker
-def get_qualitative_data(ticker, info):
+def get_qualitative_data(info):
     # Afficher les données qualitatives de l'actif financier via son ticker
     qualitative_data = {
         "Company name": info.get("longName")    if info.get("longName") 
@@ -106,6 +118,7 @@ def get_qualitative_data(ticker, info):
 # Récupérer sur yahoo!finance les données quantitatives de l'actif financier via son ticker
 def get_quantitative_data(ticker, info, ticker_currency, my_currency, exchange_rate):
     # Accéder à l'historique de prix et y déterminer ce qui suit
+    time.sleep(delai)
     price_data = ticker.history(period="1d")
     if not price_data.empty:
         last_price_date = price_data.index[-1].strftime('%Y-%m-%d')                                                         # Dernier prix last de l'actif financier
@@ -138,7 +151,7 @@ def get_quantitative_data(ticker, info, ticker_currency, my_currency, exchange_r
                                                                                                                                                                                         else f"{GREEN}+{round(price_change_value * exchange_rate, 2)} {my_currency}{RESET} <-- {GREEN}+{round(price_change_value, 2)} {info.get("currency")}{RESET}",
         "Price Change (percent)":   f"{RED}{round(price_change_percent * 100, 2)}%{RESET}"  if price_change_percent <= 0 
                                                                                             else f"{GREEN}+{round(price_change_percent * 100, 2)}%{RESET}",
-        "Forward Earning": f"{round(info.get("epsForward") * exchange_rate, 2)} {my_currency} <-- {round(info.get("lastDividendValue"), 2)} {info.get('currency')}"     if info.get("lastDividendValue") 
+        "Forward Earning": f"{round(info.get("epsForward") * exchange_rate, 2)} {my_currency} <-- {round(info.get("lastDividendValue"), 2)} {info.get('currency')}"     if info.get("epsForward") 
                                                                                                                                                                         else "N/A",
         "Last Dividend": f"{round(info.get("lastDividendValue") * exchange_rate, 2)} {my_currency} <-- {round(info.get("lastDividendValue"), 2)} {info.get('currency')}"    if info.get("lastDividendValue") 
                                                                                                                                                                             else "N/A",
@@ -152,8 +165,8 @@ def get_quantitative_data(ticker, info, ticker_currency, my_currency, exchange_r
                                                                                                                                                                     else "N/A",
         "Shares outstanding": f"{info.get("sharesOutstanding")} shares"     if info.get("sharesOutstanding") 
                                                                             else "N/A", 
-        "Number of Employees": info.get("fullTimeEmployees")    if info.get("fullTimeEmployees") 
-                                                                else "N/A", 
+        "Number of Employees": f"{info.get("fullTimeEmployees")} employees" if info.get("fullTimeEmployees") 
+                                                                            else "N/A", 
         "52 Week High": f"{round(info.get('fiftyTwoWeekHigh') * exchange_rate, 2)} {my_currency} <-- {round(info.get('fiftyTwoWeekHigh'), 2)} {info.get('currency')}"   if info.get("fiftyTwoWeekHigh") 
                                                                                                                                                                         else "N/A", 
         "52 Week Low": f"{round(info.get('fiftyTwoWeekLow') * exchange_rate, 2)} {my_currency} <-- {round(info.get('fiftyTwoWeekLow'), 2)} {info.get('currency')}"  if info.get("fiftyTwoWeekLow") 
@@ -182,50 +195,51 @@ def get_quantitative_data(ticker, info, ticker_currency, my_currency, exchange_r
 
 
 # Emettre le graphique d'évolution de prix de l'actif financier via son ticker
-def chart(info, ticker, exchange_rate, my_currency):
+def chart(input_ticker, info, ticker, exchange_rate, my_currency):
     # Indiquer les périodes et labels du grpahique
     periods = {
-        "1": "1d", "2": "5d", "3": "1mo", "4": "3mo", 
+        "1": "3d", "2": "5d", "3": "1mo", "4": "3mo", 
         "5": "6mo", "6": "1y", "7":"5y", "8": "10y", "9": "max"
     }
     labels = {
-        "1": "1 jour", "2": "5 jours", "3": "1 mois", "4": "1 trimestre", 
+        "1": "3 jours", "2": "5 jours", "3": "1 mois", "4": "1 trimestre", 
         "5": "1 semestre", "6": "1 an", "7": "5 ans", "8": "10 ans", "9": "Depuis le début"
     }
 
     # Boucle de la composition du graphique d'évolution de prix de l'actif financier
     while True:
         # Afficher d'une légende pour faciliter le choix de la période
-        print("\nPériode du graphique :", 
-              "\n   1: 1 jour       ‖ 2: 5 jours    ‖ 3: 1 mois     ‖ 4: 1 trimestre", 
+        print("Période du graphique :", 
+              "\n   1: 3 jours      ‖ 2: 5 jours    ‖ 3: 1 mois     ‖ 4: 1 trimestre", 
               "\n   5: 1 semestre   ‖ 6: 1 an       ‖ 7: 5 ans      ‖ 8: 10 ans         ‖ 9: Depuis le début")
         
         # Choisir la période et paramétrer le label
-        period_choice = input(f"---> Votre choix est un graphique de {input_ticker} sur une période #").strip()
+        period_choice = input(f"{ROSE}---> Votre choix est un graphique de {input_ticker} sur une période{RESET} #").strip()
         period = periods.get(period_choice)
         label = labels.get(period_choice)
         if not period:
-            print("Choix invalide. Veuillez réessayer.")
+            print(f"{RED}Choix invalide. Veuillez réessayer.{RESET}")
             continue
 
         # Vérifier la période choisie et Convertir les prix en monnaie locale
         period_data = ticker.history(period = period)
+        time.sleep(delai)
         if period_data.empty:
-            print("Aucune donnée n'est disponible pour cette période. Veuillez réessayez.")
+            print(f"{RED}Aucune donnée n'est disponible pour cette période. Veuillez réessayez.{RESET}")
             continue
         period_data["Converted_Close"] = period_data["Close"] * exchange_rate
 
         # Indiquer les paramètres du graphique de l'évolution de prix de l'actif financier
         plt.figure(figsize=(16, 5))
         plt.plot(period_data.index, period_data["Converted_Close"], label="Prix (converti)", color="blue")
-        plt.title(f"Évolution du prix de {info.get("longName")} (sur {label})")
-        plt.xlabel("Date")
-        plt.ylabel(f"Prix (en {my_currency})")
+        plt.title(f"Évolution du prix de {info.get('longName')} (sur {label}, {datetime.now().date()})", fontweight='bold')
+        plt.xlabel("Date", fontweight='bold')
+        plt.ylabel(f"Prix (en {my_currency})", fontweight='bold')
         plt.grid(True, which='both', linestyle='--', linewidth=0.5, color='gray')
         plt.minorticks_on()
 
         ax = plt.gca()
-        if period == "1d":
+        if period == "3d":
             ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d %Hh'))
             ax.xaxis.set_major_locator(mdates.HourLocator(interval=6))
         elif period == "5d":
@@ -251,26 +265,53 @@ def chart(info, ticker, exchange_rate, my_currency):
         break
     
 
-# Afficher les données qualitatives et quantitatives extraites sur l'actif financie via son ticker
+# Afficher les données qualitatives et quantitatives extraites sur l'actif financier via son ticker
 def results_display(input_ticker, ticker, info, ticker_currency, my_currency, exchange_rate):
-    print(f"\n--- INFORMATIONS QUALITATITVES POUR {input_ticker} ---")
-    qualitative_data = get_qualitative_data(ticker, info)
+    console.print(Panel(f"[bold yellow]--- INFORMATIONS QUALITATITVES POUR {input_ticker} ({datetime.now().date()}) ---[bold yellow]"))
+    qualitative_data = get_qualitative_data(info)
+    table_qual = Table(title=None, show_header=False)
     for key, value in qualitative_data.items():
-        print(f"{key}: {value}")
+        table_qual.add_row(key, str(value), end_section=True)
+    console.print(table_qual)
     
-    print(f"\n--- INFORMATIONS QUANTITATIVES POUR {input_ticker} ---")
+    console.print(Panel(f"[bold yellow]--- INFORMATIONS QUANTITATIVES POUR {input_ticker} ({datetime.now().date()}) ---[bold yellow]"))
     quantitative_data = get_quantitative_data(ticker, info, ticker_currency, my_currency, exchange_rate)
+    table_quant = Table(title=None, show_header=False)
     for key, value in quantitative_data.items():
-        print(f"{key}: {value}")
+        table_quant.add_row(key, str(value), end_section=True)
+    console.print(table_quant)
 
 
+# Préparer l'affichage final des résultats sur l'actif financier
+def final_display():
+    console.print(Panel(f"[bold cyan]---> Lancement de Financial Asset Profile ({datetime.now().date()}) - conçu par William Amani[/bold cyan]", border_style="cyan"))
+    # Lancer une boucle de l'affiche desdits résultats
+    while True:
+        input_ticker, ticker, info = get_ticker()
+        ticker_currency, my_currency, exchange_rate = convert_currency(info)
+        
+        results_display(input_ticker, ticker, info, ticker_currency, my_currency, exchange_rate)
+
+        console.print(Panel(f"[bold yellow]--- GRAPHIQUE POUR {input_ticker} ({datetime.now().date()}) ---[bold yellow]"))
+        chart(input_ticker, info, ticker, exchange_rate, my_currency)
+        
+        # Rélancer, ou pas, le code FAP pour un autre actif financier
+        while True:
+            restart = input("\nSouhaitez-vous analyser un autre actif financier ? (O-Oui, N-Non) ---> ").strip().upper()
+            if restart in ["O", "N"]:
+                break
+            print(f"{RED}Veuillez répondre par 'O' pour Oui ou 'N' pour Non.{RESET}")
+        if restart == "O":
+            console.print(Panel("[bold cyan]---> Lancement de FAP pour un autre actif financier[/bold cyan]", border_style="cyan"))
+            continue
+        else:   # restart == "N"
+            console.print(Panel("[bold green]Informations fournies. Merci d'avoir utilisé notre outil, le FAP ! <---[/bold green]", border_style="green"))
+            break
+            
+        
 # Restreindre l'exécution de ce code au lancement de ce fichier uniquement
 if __name__ == "__main__":
-    print("Exécution de Financial Asset Profile - conçu par William Amani")
-    input_ticker, ticker, info = get_ticker()
-    ticker_currency, my_currency, exchange_rate = convert_currency(info)
-    results_display(input_ticker, ticker, info, ticker_currency, my_currency, exchange_rate)
-    chart(info, ticker, exchange_rate, my_currency)
+    final_display()
 
 
 
