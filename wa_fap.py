@@ -295,7 +295,7 @@ def final_display():
         console.print(Panel(f"[bold yellow]--- GRAPHIQUE POUR {input_ticker} ({datetime.now().date()}) ---[bold yellow]"))
         chart(input_ticker, info, ticker, exchange_rate, my_currency)
         
-        # Rélancer, ou pas, le code FAP pour un autre actif financier
+        # Relancer, ou pas, le code FAP pour un autre actif financier
         while True:
             restart = input("\nSouhaitez-vous analyser un autre actif financier ? (O-Oui, N-Non) ---> ").strip().upper()
             if restart in ["O", "N"]:
