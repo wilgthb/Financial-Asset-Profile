@@ -295,17 +295,17 @@ def final_display():
         console.print(Panel(f"[bold yellow]--- GRAPHIQUE POUR {input_ticker} ({datetime.now().date()}) ---[bold yellow]"))
         chart(input_ticker, info, ticker, exchange_rate, my_currency)
         
-        # Relancer, ou pas, le code FAP pour un autre actif financier
+        # Relancer, ou pas, le code FinAP pour un autre actif financier
         while True:
             restart = input("\nSouhaitez-vous analyser un autre actif financier ? (O-Oui, N-Non) ---> ").strip().upper()
             if restart in ["O", "N"]:
                 break
             print(f"{RED}Veuillez répondre par 'O' pour Oui ou 'N' pour Non.{RESET}")
         if restart == "O":
-            console.print(Panel("[bold cyan]---> Lancement de FAP pour un autre actif financier[/bold cyan]", border_style="cyan"))
+            console.print(Panel("[bold cyan]---> Lancement de FinAP pour un autre actif financier[/bold cyan]", border_style="cyan"))
             continue
         else:   # restart == "N"
-            console.print(Panel("[bold green]Informations fournies. Merci d'avoir utilisé notre outil, le FAP ! <---[/bold green]", border_style="green"))
+            console.print(Panel("[bold green]Informations fournies. Merci d'avoir utilisé notre outil, le FinAP ! <---[/bold green]", border_style="green"))
             break
             
         
